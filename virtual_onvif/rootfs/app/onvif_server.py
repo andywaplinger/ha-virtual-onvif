@@ -59,6 +59,30 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
             logger.error(f"Error handling request: {e}")
             self.send_error(500)
     
+    def do_GET(self):
+        """Handle GET requests (snapshots etc)"""
+        if self.path.startswith('/snapshot'):
+            # Return a minimal valid JPEG if no real snapshot available
+            device = self.onvif_server.get_current_device()
+            snapshot_url = device.get('snapshot_url')
+            
+            if snapshot_url:
+                import requests
+                try:
+                    r = requests.get(snapshot_url, timeout=5)
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/jpeg')
+                    self.send_header('Content-Length', str(len(r.content)))
+                    self.end_headers()
+                    self.wfile.write(r.content)
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to fetch snapshot: {e}")
+            
+            self.send_error(404)
+        else:
+            self.send_error(404)
+
     def validate_ws_security(self, body):
         """Validate WS-Security UsernameToken digest"""
         import hashlib, base64
