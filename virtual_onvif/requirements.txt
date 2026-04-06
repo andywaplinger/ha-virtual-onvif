@@ -8,6 +8,7 @@ netifaces==0.11.0
 onvif-zeep==0.2.12
 aiohttp==3.9.5
 websockets==12.0
+websocket-client==1.7.0
 schedule==1.2.0
 pyyaml==6.0.1
 jinja2==3.1.2
