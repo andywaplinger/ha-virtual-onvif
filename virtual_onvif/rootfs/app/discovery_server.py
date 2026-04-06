@@ -111,7 +111,7 @@ class DiscoveryServer:
                     <wsa:Address>urn:uuid:{device_uuid}</wsa:Address>
                 </wsa:EndpointReference>
                 <wsd:Types>tns:NetworkVideoTransmitter</wsd:Types>
-                <wsd:Scopes>onvif://www.onvif.org/location/unknown onvif://www.onvif.org/name/{device_name} onvif://www.onvif.org/hardware/VirtualONVIF onvif://www.onvif.org/Profile/Streaming</wsd:Scopes>
+                <wsd:Scopes>onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/Profile/S onvif://www.onvif.org/location/unknown onvif://www.onvif.org/name/{device_name} onvif://www.onvif.org/hardware/VirtualONVIF</wsd:Scopes>
                 <wsd:XAddrs>http://{server_ip}:8081/onvif/device_service</wsd:XAddrs>
                 <wsd:MetadataVersion>1</wsd:MetadataVersion>
             </wsd:ProbeMatch>
@@ -168,7 +168,7 @@ class DiscoveryServer:
                 <wsa:Address>urn:uuid:{device_uuid}</wsa:Address>
             </wsa:EndpointReference>
             <wsd:Types>tns:NetworkVideoTransmitter</wsd:Types>
-            <wsd:Scopes>onvif://www.onvif.org/location/unknown onvif://www.onvif.org/name/{device_name} onvif://www.onvif.org/hardware/VirtualONVIF onvif://www.onvif.org/Profile/Streaming</wsd:Scopes>
+            <wsd:Scopes>onvif://www.onvif.org/Profile/Streaming onvif://www.onvif.org/Profile/S onvif://www.onvif.org/location/unknown onvif://www.onvif.org/name/{device_name} onvif://www.onvif.org/hardware/VirtualONVIF</wsd:Scopes>
             <wsd:XAddrs>http://{server_ip}:8081/onvif/device_service</wsd:XAddrs>
             <wsd:MetadataVersion>1</wsd:MetadataVersion>
         </wsd:Hello>

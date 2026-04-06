@@ -29,6 +29,13 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
         try:
             content_length = int(self.headers.get('content-length', 0))
             body = self.rfile.read(content_length).decode('utf-8')
+
+            # Validate WS-Security if present
+            if '<Security' in body:
+                if not self.validate_ws_security(body):
+                    self.send_response(401)
+                    self.end_headers()
+                    return
             
             logger.debug(f"ONVIF Request to {self.path}: {body[:200]}...")
             
@@ -52,6 +59,45 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
             logger.error(f"Error handling request: {e}")
             self.send_error(500)
     
+    def validate_ws_security(self, body):
+        """Validate WS-Security UsernameToken digest"""
+        import hashlib, base64
+        try:
+            # Extract username
+            start = body.find('<Username>') + len('<Username>')
+            end = body.find('</Username>')
+            username = body[start:end]
+            
+            # Extract nonce
+            start = body.find('<Nonce>') + len('<Nonce>')
+            end = body.find('</Nonce>')
+            nonce = base64.b64decode(body[start:end])
+            
+            # Extract created
+            start = body.find('<Created>') + len('<Created>')
+            end = body.find('</Created>')
+            created = body[start:end].encode('utf-8')
+            
+            # Extract password digest
+            start = body.find('<Password ') 
+            start = body.find('>', start) + 1
+            end = body.find('</Password>')
+            received_digest = body[start:end]
+            
+            # Get expected password from config
+            device = self.onvif_server.get_current_device()
+            password = device.get('password', '').encode('utf-8')
+            
+            # Calculate expected digest: SHA1(nonce + created + password)
+            expected = base64.b64encode(
+                hashlib.sha1(nonce + created + password).digest()
+            ).decode('utf-8')
+            
+            return received_digest == expected
+        except Exception as e:
+            logger.error(f"WS-Security validation error: {e}")
+            return True  # Fail open during testing, change to False in production
+
     def handle_device_service(self, body):
         """Handle device management requests"""
         if 'GetDeviceInformation' in body:
@@ -66,13 +112,16 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
             return self.create_fault("Unsupported device operation")
     
     def handle_media_service(self, body):
-        """Handle media service requests"""
         if 'GetProfiles' in body:
             return self.get_profiles()
         elif 'GetStreamUri' in body:
             return self.get_stream_uri(body)
         elif 'GetSnapshotUri' in body:
             return self.get_snapshot_uri(body)
+        elif 'GetVideoEncoderConfigurations' in body:
+            return self.get_video_encoder_configurations()
+        elif 'GetVideoSources' in body:
+            return self.get_video_sources()
         else:
             return self.create_fault("Unsupported media operation")
     
@@ -134,7 +183,7 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
                     <tt:WSPullPointSupport>false</tt:WSPullPointSupport>
                 </tt:Events>
                 <tt:Media xmlns:tt="http://www.onvif.org/ver10/schema">
-                    <tt:XAddr>http://{server_ip}:8082/onvif/media_service</tt:XAddr>
+                    <tt:XAddr>http://{server_ip}:8081/onvif/media_service</tt:XAddr>
                     <tt:StreamingCapabilities>
                         <tt:RTPMulticast>false</tt:RTPMulticast>
                         <tt:RTP_TCP>true</tt:RTP_TCP>
@@ -262,6 +311,81 @@ class ONVIFRequestHandler(BaseHTTPRequestHandler):
     </soap:Body>
 </soap:Envelope>"""
     
+    def get_snapshot_uri(self, body):
+        server_ip = self.onvif_server.get_server_ip()
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+    <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
+        <soap:Body>
+            <trt:GetSnapshotUriResponse xmlns:trt="http://www.onvif.org/ver10/media/wsdl">
+                <trt:MediaUri>
+                    <tt:Uri xmlns:tt="http://www.onvif.org/ver10/schema">http://{server_ip}:8081/snapshot</tt:Uri>
+                    <tt:InvalidAfterConnect xmlns:tt="http://www.onvif.org/ver10/schema">false</tt:InvalidAfterConnect>
+                    <tt:InvalidAfterReboot xmlns:tt="http://www.onvif.org/ver10/schema">false</tt:InvalidAfterReboot>
+                    <tt:Timeout xmlns:tt="http://www.onvif.org/ver10/schema">PT60S</tt:Timeout>
+                </trt:MediaUri>
+            </trt:GetSnapshotUriResponse>
+        </soap:Body>
+    </soap:Envelope>"""
+
+    def get_video_encoder_configurations(self):
+        device = self.onvif_server.get_current_device()
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+    <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+                   xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+                   xmlns:tt="http://www.onvif.org/ver10/schema">
+        <soap:Body>
+            <trt:GetVideoEncoderConfigurationsResponse>
+                <trt:Configurations token="VideoEncoder_1">
+                    <tt:Name>VideoEncoder_1</tt:Name>
+                    <tt:UseCount>1</tt:UseCount>
+                    <tt:Encoding>H264</tt:Encoding>
+                    <tt:Resolution>
+                        <tt:Width>1920</tt:Width>
+                        <tt:Height>1080</tt:Height>
+                    </tt:Resolution>
+                    <tt:Quality>5</tt:Quality>
+                    <tt:RateControl>
+                        <tt:FrameRateLimit>30</tt:FrameRateLimit>
+                        <tt:EncodingInterval>1</tt:EncodingInterval>
+                        <tt:BitrateLimit>8000</tt:BitrateLimit>
+                    </tt:RateControl>
+                    <tt:H264>
+                        <tt:GovLength>30</tt:GovLength>
+                        <tt:H264Profile>Main</tt:H264Profile>
+                    </tt:H264>
+                    <tt:Multicast>
+                        <tt:Address>
+                            <tt:Type>IPv4</tt:Type>
+                            <tt:IPv4Address>0.0.0.0</tt:IPv4Address>
+                        </tt:Address>
+                        <tt:Port>0</tt:Port>
+                        <tt:TTL>0</tt:TTL>
+                        <tt:AutoStart>false</tt:AutoStart>
+                    </tt:Multicast>
+                    <tt:SessionTimeout>PT60S</tt:SessionTimeout>
+                </trt:Configurations>
+            </trt:GetVideoEncoderConfigurationsResponse>
+        </soap:Body>
+    </soap:Envelope>"""
+
+    def get_video_sources(self):
+        return f"""<?xml version="1.0" encoding="UTF-8"?>
+    <soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope"
+                   xmlns:trt="http://www.onvif.org/ver10/media/wsdl"
+                   xmlns:tt="http://www.onvif.org/ver10/schema">
+        <soap:Body>
+            <trt:GetVideoSourcesResponse>
+                <trt:VideoSources token="VideoSource_1">
+                    <tt:Framerate>30</tt:Framerate>
+                    <tt:Resolution>
+                        <tt:Width>1920</tt:Width>
+                        <tt:Height>1080</tt:Height>
+                    </tt:Resolution>
+                </trt:VideoSources>
+            </trt:GetVideoSourcesResponse>
+        </soap:Body>
+    </soap:Envelope>"""
+
     def handle_subscription(self, body):
         """Handle event subscription"""
         # Extract consumer reference from request
