@@ -5,7 +5,7 @@ FROM $BUILD_FROM
 RUN apk add --no-cache \
     python3 \
     py3-pip \
-    py3-dev \
+    python3-dev \
     gcc \
     musl-dev \
     libxml2-dev \
