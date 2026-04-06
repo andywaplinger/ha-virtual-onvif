@@ -31,6 +31,8 @@ class DiscoveryServer:
             # Create UDP socket
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self.server_socket.settimeout(1.0)
             
             # Bind to multicast group
             self.server_socket.bind(('', self.multicast_port))
